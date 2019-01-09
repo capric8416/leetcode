@@ -1,0 +1,163 @@
+# !/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+import json
+import os
+
+from fire import Fire
+
+from . import DATA_DIR, PullConf, PushConf, Session, logger
+from .account import main as account
+
+
+class Push:
+    def __init__(
+            self,
+            cookies: dict,
+            content_url: str,
+            submit_url: str,
+            check_url: str,
+            submit_src: str,
+            ext_lang: dict,
+            ext_comment: dict,
+            slug_id: dict,
+            delimiter: str,
+    ):
+        """
+        参数配置
+        :param cookies: login cookies
+        :param content_url: content url
+        :param submit_url: submit url
+        :param check_url: submission check url
+        :param submit_src: source path
+        :param ext_lang: dict[ext][lang]
+        :param ext_comment: dict[ext][comment]
+        :param slug_id: dict[slug][id]
+        :param delimiter: delimiter line
+        """
+
+        self.content_url = content_url
+
+        self.submit_src = submit_src
+        self.submit_url = submit_url
+        self.check_url = check_url
+
+        name, ext = os.path.splitext(os.path.basename(submit_src))
+        ext = ext.lstrip('.')
+        self.lang = ext_lang[ext]
+        self.slug = name.replace('_', '-')
+        self.id = slug_id[self.slug]
+        s_comment, e_comment = ext_comment[ext]
+        self.delimiter = f'{s_comment} {delimiter} {e_comment}'
+
+        self.session = Session()
+        self.session.set_cookies(cookies)
+
+        self.logger = logger(name=self.__class__.__name__)
+
+    def submit(self):
+        """提交"""
+
+        with open(self.submit_src) as fp:
+            src_code = fp.read()
+            s, e = src_code.find(self.delimiter) + len(self.delimiter), src_code.rfind(self.delimiter)
+            src_code = src_code[s:e].strip()
+
+        refer, token = self.content()
+        headers = {'x-csrftoken': token, 'Referer': refer, 'content-type': 'application/json'}
+        data = {
+            'lang': self.lang,
+            'question_id': self.id,
+            'typed_code': src_code
+        }
+
+        resp = self.session.request(method='post', url=self.submit_url, headers=headers, data=json.dumps(data))
+        submission_id = resp.json()['submission_id']
+
+        self.check(refer=refer, submission_id=submission_id)
+
+    def check(self, refer: str, submission_id: int):
+        """检查"""
+
+        headers = {'Referer': refer}
+
+        while True:
+            data = self.session.request(url=self.check_url.format(submission_id=submission_id), headers=headers).json()
+            stat = data['state']
+            self.logger.info(stat)
+
+            if stat == 'STARTED':
+                continue
+            if stat == 'SUCCESS':
+                s, r, p, m, n = data['status_msg'], data['status_runtime'], \
+                                data['runtime_percentile'] or 'N/A', data.get('memory', 'N/A'), data['pretty_lang']
+                self.logger.info(f'Status: {s}, runtime: {r}, memory: {m} bytes, '
+                                 f'faster than {p}% of {n} online submissions for Two Sum.')
+                if s != 'Accepted':
+                    self.logger.error(data['full_compile_error'])
+
+            break
+
+    def content(self):
+        """正文"""
+
+        resp = self.session.request(url=f'{self.content_url}/{self.slug}/')
+        return resp.url + 'submissions/', self.session.get_cookies()['csrftoken']
+
+
+def config() -> tuple:
+    """读配置"""
+
+    return PullConf().value, PushConf().value
+
+
+def main(target: str, path: str):
+    """
+    执行器
+    :param target: 目标方法
+    :param path: 源码路径
+    """
+
+    logger_ = logger('push')
+
+    pull_conf, push_conf = config()
+
+    if not target:
+        logger_.info(f'Available targets:', push_conf['targets'])
+        return
+
+    with open(pull_conf['path']['toc'].format(data_dir=DATA_DIR)) as fp:
+        toc = json.load(fp)
+
+    stat = pull_conf['keys']['toc']['stat']
+    question_slug = pull_conf['keys']['toc']['question_slug']
+    question_id = pull_conf['keys']['toc']['question_id']
+    slug_id = {entry[stat][question_slug]: entry[stat][question_id] for entry in toc}
+
+    ext_lang = {v['ext']: k for k, v in pull_conf['languages'].items()}
+    ext_comment = {v['ext']: v['comment'] for k, v in pull_conf['languages'].items()}
+
+    while True:
+        logged, cookies = account(target='check')
+        if logged:
+            break
+        logged, cookies = account(target='login')
+        if logged:
+            break
+
+    push = Push(
+        cookies=cookies,
+        content_url=pull_conf['url']['content'],
+        submit_url=push_conf['url']['submit'],
+        check_url=push_conf['url']['check'],
+        submit_src=path,
+        ext_lang=ext_lang,
+        ext_comment=ext_comment,
+        slug_id=slug_id,
+        delimiter=pull_conf['source']['delimiter']
+    )
+    return getattr(push, target)()
+
+
+if __name__ == '__main__':
+    Fire(main)

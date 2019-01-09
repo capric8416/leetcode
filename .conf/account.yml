@@ -1,0 +1,13 @@
+---
+targets:
+  - login
+  - logout
+  - check
+account:
+  user: capric8416@gmail.com
+path:
+  cookie: '{data_dir}/account/{user}.json'
+url:
+  index: 'https://leetcode.com'
+  login: 'https://leetcode.com/accounts/login/'
+

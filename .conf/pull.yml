@@ -1,0 +1,53 @@
+---
+targets:
+  - toc
+  - content
+  - source
+path:
+  toc: '{data_dir}/toc.json'
+  content: '{data_dir}/content'
+  source: '{path}/algorithms'
+url:
+  toc: https://leetcode.com/api/problems/algorithms/
+  content: https://leetcode.com/problems
+  graph_ql: https://leetcode.com/graphql
+keys:
+  toc:
+    stat: stat
+    items: stat_status_pairs
+    frontend_id: frontend_question_id
+    question_id: question_id
+    question_slug: question__title_slug
+  content:
+    data: data
+    question: question
+    content: content
+    snippets: codeSnippets
+    lang: langSlug
+    code: code
+source:
+  delimiter: '==================== body ===================='
+languages:
+  cpp:
+    dir: cpp
+    ext: cpp
+    comment:
+      - '/*'
+      - '*/'
+    header: ''
+  golang:
+    dir: go
+    ext: go
+    comment:
+      - '/*'
+      - '*/'
+    header: ''
+  python3:
+    dir: python
+    ext: py
+    comment:
+      - '"""'
+      - '"""'
+    header:
+      - '# !/usr/bin/env python'
+      - '# -*- coding: utf-8 -*-'
