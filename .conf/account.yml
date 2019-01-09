@@ -1,7 +1,7 @@
 ---
-targets:
-  - login
-  - logout
+methods:
+  - sign_in
+  - sign_out
   - check
 account:
   user: capric8416@gmail.com
@@ -9,5 +9,5 @@ path:
   cookie: '{data_dir}/account/{user}.json'
 url:
   index: 'https://leetcode.com'
-  login: 'https://leetcode.com/accounts/login/'
+  sign_in: 'https://leetcode.com/accounts/login/'
 

@@ -2,13 +2,10 @@
 # -*- coding: utf-8 -*-
 
 
-from cli.pull import main as pull
-from cli.push import main as push
-from cli.account import main as account
-
 from fire import Fire
 
+from cli import account, pull, push
 
 if __name__ == '__main__':
+    _, _, _ = account, pull, push
     Fire()
-

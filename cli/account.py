@@ -7,31 +7,31 @@ from getpass import getpass
 
 from fire import Fire
 
-from . import DATA_DIR, LoginConf, Session, logger
+from .common import AccountConf, DATA_DIR, Session, logger
 
 
 class Account:
     def __init__(
             self,
             index_url: str,
-            login_url: str,
+            sign_in_url: str,
             user: str,
             password: str,
             path: str,
             force: bool
     ):
         """
-        参数配置
+        Initial
         :param index_url: homepage url
-        :param login_url: login url
+        :param sign_in_url: sign in url
         :param user: user name
         :param password: user password
         :param path: cookies path
-        :param force: re-login
+        :param force: force re-sign-in
         """
 
         self.index_url = index_url
-        self.login_url = login_url
+        self.sign_in_url = sign_in_url
 
         self.user = user
         self.password = password
@@ -43,18 +43,61 @@ class Account:
 
         self.logger = logger(name=self.__class__.__name__)
 
+    @classmethod
+    def run(cls, method: str, force: bool = False):
+        """
+        launch entry
+        :param method: target method
+        :param force: force re-sign-in
+        :return:
+        """
+
+        logger_ = logger(cls.__name__)
+
+        conf, path = cls.config()
+
+        if method not in conf['methods']:
+            logger_.info('Available methods: %s', conf['methods'])
+            return
+
+        password = ''
+        if method == cls.sign_in.__name__:
+            password = getpass()
+            assert password, 'Empty password not allowed'
+
+        obj = cls(
+            index_url=conf['url']['index'],
+            sign_in_url=conf['url']['sign_in'],
+            user=conf['account']['user'],
+            password=password,
+            path=path,
+            force=force,
+        )
+        return getattr(obj, method)(), obj.session.get_cookies()
+
+    @staticmethod
+    def config() -> tuple:
+        """read configuration"""
+
+        conf = AccountConf().value
+
+        path = conf['path']['cookie'].format(data_dir=DATA_DIR, user=conf['account']['user'])
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        return conf, path
+
     def index(self) -> tuple:
-        """访问首页"""
+        """visit index page"""
 
         self.session.set_cookies(self.load())
         resp = self.session.request(url=self.index_url)
-        return resp.url, self.session.get_cookies()['csrftoken'], self.check(text=resp.text)
+        return resp.url, self.session.get_cookies()['csrftoken'], self._check(text=resp.text)
 
-    def login(self):
-        """登录"""
+    def sign_in(self):
+        """sign in"""
 
-        refer, token, logged = self.index()
-        if not self.force and logged:
+        refer, token, signed_in = self.index()
+        if not self.force and signed_in:
             self.logger.info('No need to login again')
             return True
 
@@ -66,7 +109,7 @@ class Account:
             'csrfmiddlewaretoken': token
         }
 
-        resp = self.session.request(method='post', url=self.login_url, headers=headers, data=data)
+        resp = self.session.request(method='post', url=self.sign_in_url, headers=headers, data=data)
         if not self.check(text=resp.text):
             self.logger.info('Login failed, please check your user and password')
             return False
@@ -76,28 +119,29 @@ class Account:
 
         return True
 
-    def logout(self):
-        """登出"""
+    def sign_out(self):
+        """sign out"""
 
         if os.path.exists(self.path):
             os.remove(self.path)
 
     def check(self, text: str = ''):
-        """检查登录状态"""
+        """check signed_in"""
 
-        if not text:
-            return self.index()[-1]
+        return self._check(text) if text else self.index()[-1]
 
+    @staticmethod
+    def _check(text: str):
         return 'isSignedIn: true' in text
 
     def dump(self, cookies: dict):
-        """保存登录信息"""
+        """write cookies"""
 
         with open(self.path, mode='w') as fp:
             json.dump(obj=cookies, fp=fp, ensure_ascii=False, indent='\t', sort_keys=True)
 
     def load(self) -> dict:
-        """读取登录信息"""
+        """read cookies"""
 
         if not os.path.exists(self.path):
             return {}
@@ -109,47 +153,7 @@ class Account:
                 return {}
 
 
-def config() -> tuple:
-    """读配置"""
-
-    conf = LoginConf().value
-
-    path = conf['path']['cookie'].format(data_dir=DATA_DIR, user=conf['account']['user'])
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    return conf, path
-
-
-def main(target: str, force: bool = False):
-    """
-    执行器
-    :param target: 目标方法
-    :param force: 重新登录
-    """
-
-    logger_ = logger('account')
-
-    conf, path = config()
-
-    if not target:
-        logger_.info(f'Available targets:', conf['targets'])
-        return
-
-    password = ''
-    if target == 'login':
-        password = getpass()
-        assert password, 'Empty password not allowed'
-
-    account = Account(
-        index_url=conf['url']['index'],
-        login_url=conf['url']['login'],
-        user=conf['account']['user'],
-        password=password,
-        path=path,
-        force=force,
-    )
-    return getattr(account, target)(), account.session.get_cookies()
-
+account = Account.run
 
 if __name__ == '__main__':
-    Fire(main)
+    Fire(account)

@@ -11,7 +11,7 @@ from typing import Dict, Generator, Union
 from fire import Fire
 from lxml import html
 
-from . import DATA_DIR, PKG_PATH, PullConf, QueryConf, Session, logger
+from .common import DATA_DIR, PKG_PATH, PullConf, QueryConf, Session, logger
 
 
 class Pull:
@@ -30,7 +30,7 @@ class Pull:
             delimiter: str,
     ):
         """
-        参数配置
+        Initial
         :param toc_url: toc json url
         :param content_url: content url
         :param graph_ql_url: GraphQL url
@@ -64,14 +64,66 @@ class Pull:
 
         self.logger = logger(name=self.__class__.__name__)
 
+    @classmethod
+    def run(cls, method: str):
+        """
+        launch entry
+        :param method: target method
+        """
+
+        logger_ = logger(cls.__name__)
+
+        conf, graph_ql_query = cls.config()
+
+        toc_file = conf['path']['toc']
+        content_dir = conf['path']['content']
+        source_dir = conf['path']['source']
+        os.makedirs(content_dir, exist_ok=True)
+
+        obj = cls(
+            toc_url=conf['url']['toc'],
+            content_url=conf['url']['content'],
+            graph_ql_url=conf['url']['graph_ql'],
+            graph_ql_query=graph_ql_query,
+            toc_file=toc_file,
+            content_dir=content_dir,
+            source_dir=source_dir,
+            toc_keys=conf['keys']['toc'],
+            content_keys=conf['keys']['content'],
+            languages=conf['languages'],
+            delimiter=conf['source']['delimiter'],
+        )
+
+        if isinstance(method, str):
+            method = [method]
+        for m in method:
+            if m not in conf['methods']:
+                logger_.info('Available methods: %s', conf['methods'])
+                continue
+
+            getattr(obj, m)()
+
+    @staticmethod
+    def config() -> tuple:
+        """read configuration"""
+
+        conf = PullConf().value
+        query = QueryConf().value
+
+        for k in tuple(conf['path'].keys()):
+            v = conf['path'][k]
+            conf['path'][k] = v.format(path=PKG_PATH, data_dir=DATA_DIR)
+
+        return conf, query
+
     def toc(self) -> None:
-        """下载目录"""
+        """download toc"""
 
         data = self.session.request(url=self.toc_url).json()
         self.dump_toc(data)
 
     def content(self) -> None:
-        """下载正文"""
+        """download content"""
 
         toc = self.load_toc()
         for index, slug in self.walk_toc(toc):
@@ -95,7 +147,7 @@ class Pull:
             self.wait()
 
     def source(self) -> None:
-        """生成源码"""
+        """generate source snippets"""
 
         types = set(self.languages.keys())
 
@@ -128,7 +180,7 @@ class Pull:
                 self.dump_source(slug, lang, conf, question, code)
 
     def filter_snippets(self, items: list, types: set) -> Generator:
-        """过滤源码"""
+        """filter source snippets"""
 
         for item in items:
             lang = item[self.content_keys['lang']]
@@ -136,14 +188,14 @@ class Pull:
                 yield lang, item[self.content_keys['code']].strip()
 
     def walk_toc(self, data: dict):
-        """迭代目录"""
+        """iter toc"""
 
         for index, item in enumerate(data):
             stat, question_slug = self.toc_keys['stat'], self.toc_keys['question_slug']
             yield index, item[stat][question_slug]
 
     def dump_toc(self, data: dict) -> None:
-        """写目录"""
+        """write toc"""
 
         with open(file=self.toc_file, mode='w') as fp:
             stat, frontend_id = self.toc_keys['stat'], self.toc_keys['frontend_id']
@@ -151,30 +203,30 @@ class Pull:
             json.dump(obj=obj, fp=fp, ensure_ascii=False, indent='\t', sort_keys=True)
 
     def load_toc(self):
-        """读目录"""
+        """read toc"""
 
         with open(file=self.toc_file) as fp:
             return json.load(fp=fp)
 
     @staticmethod
     def dump_content(path: str, data: Union[list, dict]) -> None:
-        """写正文"""
+        """write content"""
 
         with open(file=path, mode='w') as fp:
             json.dump(obj=data, fp=fp, ensure_ascii=False, indent='\t', sort_keys=True)
 
     def load_content(self, path: str) -> Union[None, list, dict]:
-        """读正文"""
+        """read content"""
 
         return self.load_json(path)
 
     def content_path(self, slug: str) -> str:
-        """正文路径"""
+        """path of content"""
 
         return f'{self.content_dir}/{slug}.json'
 
     def dump_source(self, slug: str, lang: str, conf: dict, question: str, code: str) -> None:
-        """写源码"""
+        """write source"""
 
         path = self.source_path(slug=slug, lang=lang, ext=conf['ext'])
         source = self.load_source(path)
@@ -199,7 +251,7 @@ class Pull:
 
     @staticmethod
     def load_source(path: str) -> Union[None, str]:
-        """读源码"""
+        """read source"""
 
         if not os.path.exists(path):
             return ''
@@ -208,7 +260,7 @@ class Pull:
             return fp.read()
 
     def source_path(self, slug: str, lang: str, ext: str) -> str:
-        """源码路径"""
+        """path of source"""
 
         if slug and lang and ext:
             return f'{self.source_dir}/{lang}/{slug.replace("-", "_")}.{ext}'
@@ -217,7 +269,7 @@ class Pull:
 
     @staticmethod
     def load_json(path: str) -> Union[None, list, dict]:
-        """读json"""
+        """read json"""
 
         if not os.path.exists(path):
             return
@@ -230,64 +282,12 @@ class Pull:
 
     @staticmethod
     def wait(low: float = 0.2, up: float = 0.7, ratio: float = 2) -> None:
-        """等待"""
+        """sleep"""
 
         time.sleep(ratio * random.uniform(low, up))
 
 
-def config() -> tuple:
-    """读配置"""
-
-    conf = PullConf().value
-    query = QueryConf().value
-
-    for k in tuple(conf['path'].keys()):
-        v = conf['path'][k]
-        conf['path'][k] = v.format(path=PKG_PATH, data_dir=DATA_DIR)
-
-    return conf, query
-
-
-def main(target: str):
-    """
-    执行器
-    :param target: 目标方法
-    """
-
-    logger_ = logger('account')
-
-    conf, graph_ql_query = config()
-
-    if not target:
-        logger.info(f'Available targets:', conf['targets'])
-        return
-
-    toc_file = conf['path']['toc']
-    content_dir = conf['path']['content']
-    source_dir = conf['path']['source']
-    os.makedirs(content_dir, exist_ok=True)
-
-    pull = Pull(
-        toc_url=conf['url']['toc'],
-        content_url=conf['url']['content'],
-        graph_ql_url=conf['url']['graph_ql'],
-        graph_ql_query=graph_ql_query,
-        toc_file=toc_file,
-        content_dir=content_dir,
-        source_dir=source_dir,
-        toc_keys=conf['keys']['toc'],
-        content_keys=conf['keys']['content'],
-        languages=conf['languages'],
-        delimiter=conf['source']['delimiter'],
-    )
-
-    for func in target.split(','):
-        if func not in conf['targets']:
-            logger_.info(f'Available targets:', conf['targets'])
-            continue
-
-        getattr(pull, func)()
-
+pull = Pull.run
 
 if __name__ == '__main__':
-    Fire(main)
+    Fire(pull)

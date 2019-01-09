@@ -30,13 +30,13 @@ leetcode/bin/python cli.py pull source
 # open .conf/account.yml
 # update account - user section, place your leetcode account
 ```
-#### login
+#### sign in
 ```bash
-leetcode/bin/python cli.py account login
+leetcode/bin/python cli.py account sign_in
 ```
-#### logout
+#### sign out
 ```bash
-leetcode/bin/python cli.py account logout
+leetcode/bin/python cli.py account sign_out
 ```
 
 

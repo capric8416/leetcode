@@ -1,5 +1,5 @@
 ---
-targets:
+methods:
   - toc
   - content
   - source
@@ -29,21 +29,18 @@ source:
   delimiter: '==================== body ===================='
 languages:
   cpp:
-    dir: cpp
     ext: cpp
     comment:
       - '/*'
       - '*/'
     header: ''
   golang:
-    dir: go
     ext: go
     comment:
       - '/*'
       - '*/'
     header: ''
   python3:
-    dir: python
     ext: py
     comment:
       - '"""'

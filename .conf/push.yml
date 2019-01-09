@@ -1,5 +1,5 @@
 ---
-targets:
+methods:
   - submit
 url:
   submit: 'https://leetcode.com/problems/palindrome-number/submit/'
