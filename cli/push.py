@@ -56,11 +56,12 @@ class Push:
         self.logger = logger(name=self.__class__.__name__)
 
     @classmethod
-    def run(cls, method: str, path: str):
+    def run(cls, method: str, path: str, clean: bool):
         """
         launch entry
         :param method: target method
         :param path: path of source
+        :param clean: remove source
         """
 
         logger_ = logger(cls.__name__)
@@ -101,7 +102,12 @@ class Push:
             slug_id=slug_id,
             delimiter=pull_conf['source']['delimiter']
         )
-        return getattr(obj, method)()
+        result =  getattr(obj, method)()
+
+        if clean:
+            os.remove(path)
+
+        return result
 
     @staticmethod
     def config() -> tuple:

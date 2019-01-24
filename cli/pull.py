@@ -10,6 +10,7 @@ from typing import Dict, Generator, Union
 
 from fire import Fire
 from lxml import html
+from nbformat import v4 as nbf
 
 from .common import DATA_DIR, PKG_PATH, PullConf, QueryConf, Session, logger
 
@@ -27,6 +28,7 @@ class Pull:
             toc_keys: Dict[str, str],
             content_keys: dict,
             languages: dict,
+            notebook: dict,
             delimiter: str,
     ):
         """
@@ -42,6 +44,7 @@ class Pull:
         :param content_keys: content json keys
         :param languages: languages conf
         :param delimiter: delimiter line
+        :param notebook: jupyter notebook conf
         """
 
         self.toc_url = toc_url
@@ -59,6 +62,8 @@ class Pull:
 
         self.languages = languages
         self.delimiter = delimiter
+
+        self.notebook = notebook
 
         self.session = Session()
 
@@ -92,6 +97,7 @@ class Pull:
             content_keys=conf['keys']['content'],
             languages=conf['languages'],
             delimiter=conf['source']['delimiter'],
+            notebook=conf['notebook'],
         )
 
         if isinstance(method, str):
@@ -178,6 +184,34 @@ class Pull:
             for lang, code in self.filter_snippets(items=snippets, types=types):
                 conf = self.languages[lang]
                 self.dump_source(slug, lang, conf, question, code)
+
+    def jupyter(self) -> None:
+        """generate jupyter notebook"""
+
+        lang = 'jupyter'
+        os.makedirs(self.source_path(lang=lang, slug='', ext=''), exist_ok=True)
+
+        toc = self.load_toc()
+        for index, slug in self.walk_toc(toc):
+            self.logger.info(f'{index}. {slug}')
+
+            path = self.content_path(slug)
+            content = self.load_content(path)
+            if not content:
+                self.logger.info('  all ignored')
+                continue
+
+            d, q, c = self.content_keys['data'], self.content_keys['question'], self.content_keys['content']
+            question = content[d][q][c]
+            if not question:
+                self.logger.info('  all locked')
+                continue
+
+            title = content[d][q][self.content_keys['title']]
+
+            snippets = content[d][q][self.content_keys['snippets']]
+            for _, code in self.filter_snippets(items=snippets, types={'python3'}):
+                self.dump_jupyter(slug, lang, self.notebook, title, question, code)
 
     def filter_snippets(self, items: list, types: set) -> Generator:
         """filter source snippets"""
@@ -266,6 +300,28 @@ class Pull:
             return f'{self.source_dir}/{lang}/{slug.replace("-", "_")}.{ext}'
 
         return f'{self.source_dir}/{lang}'
+
+    def dump_jupyter(self, slug: str, lang: str, conf: dict, title: str, question: str, code: str) -> None:
+        """write jupyter notebook"""
+
+        path = self.source_path(slug=slug, lang=lang, ext='ipynb')
+        source = self.load_source(path)
+        if len(source) > 200:
+            self.logger.info(f'  {lang} skipped')
+            return
+
+        nb = nbf.new_notebook(metadata=conf)
+        tmp = slug.replace('-', '_') + '.py'
+        nb['cells'].extend([
+            nbf.new_markdown_cell(source=[f'<h1>{title}</h1>'] + [s + '<div></div>' for s in question.split('\r\n')]),
+            nbf.new_code_cell(source=f'%%writefile {tmp}\n' + code.replace('\r\n', '\n')),
+            nbf.new_code_cell(source=f'# submit\n%run ../../cli.py push --method=submit --path={tmp} --clean=True'),
+        ])
+
+        with open(path, mode='w') as fp:
+            json.dump(obj=nb, fp=fp, indent='    ')
+
+        self.logger.info(f'  {lang} updated')
 
     @staticmethod
     def load_json(path: str) -> Union[None, list, dict]:

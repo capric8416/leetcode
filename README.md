@@ -9,6 +9,7 @@ python3 -m venv leetcode
 leetcode/bin/python -m pip install -r requirements.txt
 ```
 
+
 ### pull
 #### pull toc
 ```bash
@@ -21,6 +22,10 @@ leetcode/bin/python cli.py pull content
 #### pull source
 ```bash
 leetcode/bin/python cli.py pull source
+```
+#### pull jupyter
+```bash
+leetcode/bin/python cli.py pull jupyter
 ```
 
 
