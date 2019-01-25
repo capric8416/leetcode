@@ -18,7 +18,6 @@ class Account:
             user: str,
             password: str,
             path: str,
-            force: bool
     ):
         """
         Initial
@@ -27,7 +26,6 @@ class Account:
         :param user: user name
         :param password: user password
         :param path: cookies path
-        :param force: force re-sign-in
         """
 
         self.index_url = index_url
@@ -37,18 +35,15 @@ class Account:
         self.password = password
         self.path = path
 
-        self.force = force
-
         self.session = Session()
 
         self.logger = logger(name=self.__class__.__name__)
 
     @classmethod
-    def run(cls, method: str, force: bool = False):
+    def run(cls, method: str, *args, **kwargs):
         """
         launch entry
         :param method: target method
-        :param force: force re-sign-in
         :return:
         """
 
@@ -71,9 +66,8 @@ class Account:
             user=conf['account']['user'],
             password=password,
             path=path,
-            force=force,
         )
-        return getattr(obj, method)(), obj.session.get_cookies()
+        return getattr(obj, method)(*args, **kwargs), obj.session.get_cookies()
 
     @staticmethod
     def config() -> tuple:
@@ -93,11 +87,11 @@ class Account:
         resp = self.session.request(url=self.index_url)
         return resp.url, self.session.get_cookies()['csrftoken'], self._check(text=resp.text)
 
-    def sign_in(self):
+    def sign_in(self, force: bool = False):
         """sign in"""
 
         refer, token, signed_in = self.index()
-        if not self.force and signed_in:
+        if not force and signed_in:
             self.logger.info('No need to login again')
             return True
 
@@ -118,6 +112,18 @@ class Account:
         self.dump(cookies=self.session.get_cookies())
 
         return True
+
+    def sign_in_until_success(self):
+        """sign in until success"""
+
+        while True:
+            signed_in = self.check()
+            if signed_in:
+                return True
+
+            signed_in, cookies = self.sign_in()
+            if signed_in:
+                return True
 
     def sign_out(self):
         """sign out"""

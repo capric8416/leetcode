@@ -12,6 +12,7 @@ from fire import Fire
 from lxml import html
 from nbformat import v4 as nbf
 
+from .account import account
 from .common import DATA_DIR, PKG_PATH, PullConf, QueryConf, Session, logger
 
 
@@ -70,7 +71,7 @@ class Pull:
         self.logger = logger(name=self.__class__.__name__)
 
     @classmethod
-    def run(cls, method: str):
+    def run(cls, method: str, *args, **kwargs):
         """
         launch entry
         :param method: target method
@@ -107,7 +108,7 @@ class Pull:
                 logger_.info('Available methods: %s', conf['methods'])
                 continue
 
-            getattr(obj, m)()
+            getattr(obj, m)(*args, **kwargs)
 
     @staticmethod
     def config() -> tuple:
@@ -125,7 +126,9 @@ class Pull:
     def toc(self) -> None:
         """download toc"""
 
-        data = self.session.request(url=self.toc_url).json()
+        _, cookies = account(method='sign_in_until_success')
+
+        data = self.session.request(url=self.toc_url, cookies=cookies).json()
         self.dump_toc(data)
 
     def content(self) -> None:
@@ -231,10 +234,42 @@ class Pull:
     def dump_toc(self, data: dict) -> None:
         """write toc"""
 
+        status = self.toc_keys['status']
+        acs, submitted = self.toc_keys['acs'], self.toc_keys['submitted']
+        difficulty, level = self.toc_keys['difficulty'], self.toc_keys['level']
+        stat, frontend_id = self.toc_keys['stat'], self.toc_keys['frontend_id']
+        title, slug = self.toc_keys['question_title'], self.toc_keys['question_slug']
+        obj = sorted(data[self.toc_keys['items']], key=lambda x: x[stat][frontend_id])
+
         with open(file=self.toc_file, mode='w') as fp:
-            stat, frontend_id = self.toc_keys['stat'], self.toc_keys['frontend_id']
-            obj = sorted(data[self.toc_keys['items']], key=lambda x: x[stat][frontend_id])
             json.dump(obj=obj, fp=fp, ensure_ascii=False, indent='\t', sort_keys=True)
+
+        levels = ['', 'Easy', 'Medium', 'Hard']
+        colors = ['', 'green', 'goldenrod', 'red']
+        ac = {'ac': '✔', 'notac': '✘', None: ''}
+        ac_class = {'ac': 'green', 'notac': 'red', None: ''}
+        blank = '    '
+        questions = '\n'.join([
+            f'{blank * 5}<tr>'
+            f'\n{blank * 6}<td class="{ac_class[o[status]]}">{ac[o[status]]}</td>'
+            f'\n{blank * 6}<td>{i}</td>'
+            f'\n{blank * 6}<td>{o[stat][frontend_id]}</td>'
+            f'\n{blank * 6}<td class="{colors[o[difficulty][level]]}">{levels[o[difficulty][level]]}</td>'
+            f'\n{blank * 6}<td>{o[stat][acs]} / {o[stat][submitted]} = '
+            f'{round(o[stat][acs] * 100 / o[stat][submitted], 1)}%</td>'
+            f'\n{blank * 6}<td>'
+            f'\n{blank * 7}<a href="jupyter/{o[stat][slug].replace("-", "_")}.ipynb" '
+            f'target="_blank">{o[stat][title]}</a>'
+            f'\n{blank * 6}</td>'
+            f'\n{blank * 5}</tr>'
+            for i, o in enumerate(sorted(obj, key=lambda x: (x[difficulty][level], x[stat][frontend_id])), 1)
+        ])
+
+        with open(f'{self.source_dir}/toc.tpl') as fp:
+            template = fp.read()
+
+        with open(f'{self.source_dir}/toc.html', mode='w') as fp:
+            fp.write(template.replace('##########', questions))
 
     def load_toc(self):
         """read toc"""

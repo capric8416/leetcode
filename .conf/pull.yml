@@ -19,6 +19,12 @@ keys:
     frontend_id: frontend_question_id
     question_id: question_id
     question_slug: question__title_slug
+    question_title: question__title
+    difficulty: difficulty
+    level: level
+    status: status
+    acs: total_acs
+    submitted: total_submitted
   content:
     data: data
     question: question

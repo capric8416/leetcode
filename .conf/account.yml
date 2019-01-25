@@ -1,6 +1,7 @@
 ---
 methods:
   - sign_in
+  - sign_in_until_success
   - sign_out
   - check
 account:

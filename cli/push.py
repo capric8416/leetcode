@@ -56,12 +56,11 @@ class Push:
         self.logger = logger(name=self.__class__.__name__)
 
     @classmethod
-    def run(cls, method: str, path: str, clean: bool = False):
+    def run(cls, method: str, path: str, *args, **kwargs):
         """
         launch entry
         :param method: target method
         :param path: path of source
-        :param clean: remove source
         """
 
         logger_ = logger(cls.__name__)
@@ -83,13 +82,7 @@ class Push:
         ext_lang = {v['ext']: k for k, v in pull_conf['languages'].items()}
         ext_comment = {v['ext']: v['comment'] for k, v in pull_conf['languages'].items()}
 
-        while True:
-            signed_in, cookies = account(method='check')
-            if signed_in:
-                break
-            signed_in, cookies = account(method='sign_in')
-            if signed_in:
-                break
+        _, cookies = account(method='sign_in_until_success')
 
         obj = cls(
             cookies=cookies,
@@ -102,12 +95,7 @@ class Push:
             slug_id=slug_id,
             delimiter=pull_conf['source']['delimiter']
         )
-        result = getattr(obj, method)()
-
-        if clean:
-            os.remove(path)
-
-        return result
+        return getattr(obj, method)(*args, **kwargs)
 
     @staticmethod
     def config() -> tuple:
@@ -115,7 +103,7 @@ class Push:
 
         return PullConf().value, PushConf().value
 
-    def submit(self):
+    def submit(self, clean=False):
         """submit source"""
 
         with open(self.submit_src) as fp:
@@ -139,6 +127,9 @@ class Push:
 
         self.check(refer=refer, submission_id=submission_id)
 
+        if clean:
+            os.remove(self.submit_src)
+
     def check(self, refer: str, submission_id: int):
         """check submission"""
 
@@ -155,7 +146,7 @@ class Push:
                 s, r, p, m, n = data['status_msg'], data['status_runtime'], \
                                 data['runtime_percentile'] or 'N/A', data.get('memory', 'N/A'), data['pretty_lang']
                 self.logger.info(f'Status: {s}, runtime: {r}, memory: {m} bytes, '
-                                 f'faster than {p}% of {n} online submissions for Two Sum.')
+                                 f'faster than {p}% of {n} online submissions.')
                 if s != 'Accepted':
                     self.logger.error(
                         data.get('full_compile_error') or
