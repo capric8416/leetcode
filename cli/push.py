@@ -56,7 +56,7 @@ class Push:
         self.logger = logger(name=self.__class__.__name__)
 
     @classmethod
-    def run(cls, method: str, path: str, clean: bool):
+    def run(cls, method: str, path: str, clean: bool = False):
         """
         launch entry
         :param method: target method
@@ -102,7 +102,7 @@ class Push:
             slug_id=slug_id,
             delimiter=pull_conf['source']['delimiter']
         )
-        result =  getattr(obj, method)()
+        result = getattr(obj, method)()
 
         if clean:
             os.remove(path)
@@ -120,7 +120,10 @@ class Push:
 
         with open(self.submit_src) as fp:
             src_code = fp.read()
-            s, e = src_code.find(self.delimiter) + len(self.delimiter), src_code.rfind(self.delimiter)
+            s, e = src_code.find(self.delimiter), src_code.rfind(self.delimiter)
+            s = 0 if s < 0 else s + len(self.delimiter)
+            if e < 0:
+                e = len(src_code)
             src_code = src_code[s:e].strip()
 
         refer, token = self.content()
