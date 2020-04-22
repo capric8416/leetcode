@@ -36,6 +36,12 @@ keys:
 source:
   delimiter: '==================== body ===================='
 languages:
+  c:
+    ext: c
+    comment:
+      - '/*'
+      - '*/'
+    header: ''
   cpp:
     ext: cpp
     comment:
@@ -70,4 +76,4 @@ notebook:
     name: python
     nbconvert_exporter: python
     pygments_lexer: ipython3
-    version: 3.7.2
+    version: 3.7.7
